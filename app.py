@@ -25,6 +25,52 @@ from paste_transformed_rgba_roi import paste_transformed_rgba_roi
 # ------------------ GUI ------------------
 
 class SyntheticGenerator(QMainWindow):
+    def save_state(self):
+        """Save the current state for undo functionality."""
+        state = {
+            'image': self.img_label.pixmap().copy() if self.img_label.pixmap() else None,
+            # Add more state as needed (e.g., annotation data)
+        }
+        if not hasattr(self, 'undo_stack'):
+            self.undo_stack = []
+        if not hasattr(self, 'redo_stack'):
+            self.redo_stack = []
+        self.undo_stack.append(state)
+        self.redo_stack.clear()
+
+    def restore_state(self, state):
+        """Restore a saved state."""
+        if state['image']:
+            self.img_label.setPixmap(state['image'])
+        else:
+            self.img_label.clear()
+        # Restore other state as needed
+
+    def undo_action(self):
+        """Undo the last action."""
+        if not hasattr(self, 'undo_stack') or not self.undo_stack:
+            return
+        current_state = {
+            'image': self.img_label.pixmap().copy() if self.img_label.pixmap() else None,
+        }
+        if not hasattr(self, 'redo_stack'):
+            self.redo_stack = []
+        self.redo_stack.append(current_state)
+        state = self.undo_stack.pop()
+        self.restore_state(state)
+
+    def redo_action(self):
+        """Redo the last undone action."""
+        if not hasattr(self, 'redo_stack') or not self.redo_stack:
+            return
+        current_state = {
+            'image': self.img_label.pixmap().copy() if self.img_label.pixmap() else None,
+        }
+        if not hasattr(self, 'undo_stack'):
+            self.undo_stack = []
+        self.undo_stack.append(current_state)
+        state = self.redo_stack.pop()
+        self.restore_state(state)
     def __init__(self):
         """
         Initialize the main window, theme, and all state variables.
@@ -873,7 +919,14 @@ class SyntheticGenerator(QMainWindow):
             self.cut_selected()
         if e.modifiers() == Qt.ControlModifier and e.key() == Qt.Key_V:
             self.enter_paste_mode()
-
+            # Ctrl+Z for undo
+            if e.modifiers() & Qt.ControlModifier and e.key() == Qt.Key_Z:
+                self.undo_action()
+            # Ctrl+Y for redo
+            elif e.modifiers() & Qt.ControlModifier and e.key() == Qt.Key_Y:
+                self.redo_action()
+            else:
+                super().keyPressEvent(e)
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     win = SyntheticGenerator()

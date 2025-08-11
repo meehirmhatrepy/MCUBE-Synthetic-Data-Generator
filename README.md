@@ -100,6 +100,8 @@ All edits and augmentations maintain visual consistency, ensuring your exported 
 * **Ctrl + C**: Copy selected instance
 * **Ctrl + X**: Cut selected instance
 * **Ctrl + V**: Paste instance
+* **Ctrl + Z**: Undo
+* **Ctrl + Y**: Redo
 
 ---
 
