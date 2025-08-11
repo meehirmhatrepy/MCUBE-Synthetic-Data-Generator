@@ -1,4 +1,3 @@
----
 
 # MCUBE Synthetic Data Generator
 
