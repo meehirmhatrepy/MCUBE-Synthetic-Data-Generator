@@ -9,7 +9,18 @@
 It supports both YOLO and COCO annotation formats and offers a sleek, intuitive interface to streamline your workflow.
 You can globally adjust image properties such as brightness, contrast, saturation, and sharpness, perform pixel-perfect copy/cut/paste operations on annotated regions, and apply precise transformations (rotate, scale, translate) centered on each object.
 All edits and augmentations maintain visual consistency, ensuring your exported images and annotation files are immediately ready for use in computer vision training.
+---
 
+## 🎨 Screenshots
+
+![Example 1](./frame-1%20(1).png) 
+*Example 1:*
+
+![Example 2](./frame-1%20(3).png)  
+*Example 2:*
+
+![Example 3](./frame-1%20(2).png)  
+*Example 3:*
 ---
 
 ## ✨ Features
@@ -77,20 +88,6 @@ All edits and augmentations maintain visual consistency, ensuring your exported 
 * Click **Save Current (COCO .json)** to save the current image and annotations.
 
 ---
-
-## 🎨 Screenshots
-
-![Example 1](./frame-1%20(1).png) 
-*Example 1:*
-
-![Example 2](./frame-1%20(3).png)  
-*Example 2:*
-
-![Example 3](./frame-1%20(2).png)  
-*Example 3:*
-
----
-
 
 
 ## ⚡ Keyboard Shortcuts
