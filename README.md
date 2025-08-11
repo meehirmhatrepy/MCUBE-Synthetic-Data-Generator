@@ -120,7 +120,3 @@ For support or collaboration, email: [meehirmhatre1234@gmail.com](mailto:meehirm
 ---
 
 > **MCUBE Synthetic Data Generator** — Make your vision data smarter.
-
----
-
-Let me know if you want me to save this as a file for you!
