@@ -1,5 +1,3 @@
-Sure! Here is the **entire README content** in plain text format, ready to copy-paste directly into your text editor:
-
 ---
 
 # MCUBE Synthetic Data Generator
