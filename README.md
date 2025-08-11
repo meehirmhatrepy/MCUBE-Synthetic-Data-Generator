@@ -24,8 +24,8 @@
 
 1. **Clone the repository:**
    ```sh
-   git clone https://github.com/your-org/mcube-synthetic-data-generator.git
-   cd mcube-synthetic-data-generator
+   git clone https://github.com/meehirmhatrepy/MCUBE-Synthetic-Data-Generator
+   cd MCUBE-Synthetic-Data-Generator
    ```
 
 2. **Install dependencies:**
@@ -81,16 +81,9 @@
 
 ---
 
-## 💡 Tips
-
-- Use **Cut Fill Color** to choose how cut regions are filled (black or mean color).
-- All copy/paste and random generation operations use bounding box top-left for perfect alignment.
-
----
-
 ## 📝 License
 
-MIT License © 2025 MCUBE Team
+GNU General Public License v3.0 © 2025 MCUBE Team
 
 ---
 

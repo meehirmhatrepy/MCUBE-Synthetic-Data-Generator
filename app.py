@@ -172,14 +172,13 @@ class SyntheticGenerator(QMainWindow):
 
         # --- Image Display ---
         self.img_label = QLabel('Load image and label to start')
-        self.img_label.setFixedSize(1024, 1024)
+        self.img_label.setMinimumSize(800, 800)    
         self.img_label.setStyleSheet('background: rgba(35,42,61,0.95); color: #eee; border-radius: 24px; border: 2px solid #1f9ecc;')
         self.img_label.setAlignment(Qt.AlignCenter)
         self.img_label.setMouseTracking(True)
         self.img_label.mousePressEvent = self.img_mouse_press
         self.img_label.mouseMoveEvent = self.img_mouse_move
         self.img_label.mouseReleaseEvent = self.img_mouse_release
-        hb.addWidget(self.img_label)
 
         # --- Controls ---
         ctrl = QVBoxLayout()
@@ -310,7 +309,14 @@ class SyntheticGenerator(QMainWindow):
         ctrl.addLayout(exp_layout)
 
         ctrl.addStretch()
-        hb.addLayout(ctrl)
+
+      
+        ctrl_widget = QWidget()
+        ctrl_widget.setLayout(ctrl)
+        ctrl_widget.setMinimumWidth(320)  
+
+        hb.addWidget(self.img_label, stretch=2)   
+        hb.addWidget(ctrl_widget, stretch=1)      
 
     # ----------------- I/O -----------------
     def upload_image(self):
