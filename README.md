@@ -38,13 +38,14 @@ With global image adjustments (brightness, contrast, saturation, sharpness) and 
 
 ---
 
-## 🖥 Installation
+## 🖥️ Installation
 
 1. **Clone the repository:**
+
    ```sh
    git clone https://github.com/meehirmhatrepy/MCUBE-Synthetic-Data-Generator
    cd MCUBE-Synthetic-Data-Generator
-````
+   ```
 
 2. **Install dependencies:**
 
