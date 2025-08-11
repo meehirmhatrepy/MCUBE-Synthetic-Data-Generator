@@ -1,39 +1,49 @@
+Sure! Here is the **entire README content** in plain text format, ready to copy-paste directly into your text editor:
+
+---
+
 # MCUBE Synthetic Data Generator
 
 ![MCUBE Banner](./Logo.png)
 
-
 ## 🚀 Overview
 
-**MCUBE Synthetic Data Generator** is a state-of-the-art, minimal desktop application for creating, editing, and augmenting synthetic image datasets with polygonal annotations. MCUBE supports both YOLO and COCO annotation formats, and features a sleek, intuitive interface for seamless workflow. You can globally enhance images (brightness, contrast, saturation, sharpness), perform pixel-perfect copy/cut/paste of annotated regions, and apply advanced transformations (rotate, scale, translate) centered on each object. All edits and augmentations are visually consistent, ensuring your exported images and annotations are ready for robust computer vision training.
+**MCUBE Synthetic Data Generator** is a desktop application designed for creating, editing, and augmenting synthetic image datasets with polygonal annotations.
+It supports both YOLO and COCO annotation formats and offers a sleek, intuitive interface to streamline your workflow.
+You can globally adjust image properties such as brightness, contrast, saturation, and sharpness, perform pixel-perfect copy/cut/paste operations on annotated regions, and apply precise transformations (rotate, scale, translate) centered on each object.
+All edits and augmentations maintain visual consistency, ensuring your exported images and annotation files are immediately ready for use in computer vision training.
+
 ---
 
 ## ✨ Features
 
-- **Intuitive GUI** for image and annotation management
-- **Copy/Cut/Paste** polygonal instances with pixel-perfect alignment
-- **Random Variation Generator** for fast dataset augmentation
-- **Supports YOLO & COCO formats**
-- **Customizable cut fill color**
-- **Polygon transformation controls** (rotate, scale, translate)
-- **Instant preview and annotation visualization**
+* **Intuitive GUI** for seamless image and annotation management
+* **Copy, Cut, and Paste** polygonal instances with pixel-perfect accuracy
+* **Random Variation Generator** to quickly create augmented dataset samples
+* Supports both **YOLO** and **COCO** annotation formats
+* Customizable **cut fill color** options
+* Polygon transformation controls: **rotate**, **scale**, **translate**
+* Instant preview of edits and updated annotation visualization
 
 ---
 
 ## 🖥️ Installation
 
 1. **Clone the repository:**
+
    ```sh
    git clone https://github.com/meehirmhatrepy/MCUBE-Synthetic-Data-Generator
    cd MCUBE-Synthetic-Data-Generator
    ```
 
 2. **Install dependencies:**
+
    ```sh
    pip install -r requirements.txt
    ```
 
 3. **Run the application:**
+
    ```sh
    python app.py
    ```
@@ -42,42 +52,54 @@
 
 ## 📸 Usage Instructions
 
-### 1. **Load an Image**
-- Click **Upload Image** and select your image file.
+### 1. Load an Image
 
-### 2. **Load Annotations**
-- For YOLO: Click **Upload YOLO .txt** and select your segmentation file.
-- For COCO: Click **Upload COCO .json** and select your annotation file.
+* Click **Upload Image** and select your image file.
 
-### 3. **Select & Edit Instances**
-- Click on a polygon to select it.
-- Use **Copy**, **Cut**, and **Paste** buttons to duplicate or move instances.
-- Use the **Transform Selected** sliders to rotate or scale the selected polygon.
-- **Reset Transform** to revert changes.
+### 2. Load Annotations
 
-### 4. **Random Variations**
-- Choose a class from the dropdown.
-- Set the number of variations.
-- Click **Generate Random Variations** to create new images and annotations.
+* For YOLO: Click **Upload YOLO .txt** and select your segmentation file.
+* For COCO: Click **Upload COCO .json** and select your annotation file.
 
-### 5. **Export**
-- The default export folder is `generated images and annos` in your project directory.
-- Click **Save Current (COCO .json)** to save the current image and annotations.
+### 3. Select & Edit Instances
+
+* Click a polygon to select it.
+* Use **Copy**, **Cut**, and **Paste** buttons to duplicate or move instances.
+* Use **Transform Selected** sliders to rotate or scale the selected polygon.
+* Click **Reset Transform** to undo changes.
+
+### 4. Random Variations
+
+* Choose a class from the dropdown menu.
+* Set the desired number of variations.
+* Click **Generate Random Variations** to create new augmented images and annotation files.
+
+### 5. Export
+
+* The default export folder is `generated images and annos` in the project directory.
+* Click **Save Current (COCO .json)** to save the current image and annotations.
 
 ---
 
 ## 🎨 Screenshots
 
-![Main UI](https://user-images.githubusercontent.com/your-ui-screenshot.png)
-*Main interface with annotation and transformation controls.*
+![Example 1](./frame-1(1).png)  
+*Example 1:*
+
+![Example 2](./frame-1(2).png)  
+*Example 2:*
+
+![Example 3](./frame-1(3).png)  
+*Example 3:*
 
 ---
 
+
 ## ⚡ Keyboard Shortcuts
 
-- **Ctrl+C**: Copy selected instance
-- **Ctrl+X**: Cut selected instance
-- **Ctrl+V**: Paste instance
+* **Ctrl + C**: Copy selected instance
+* **Ctrl + X**: Cut selected instance
+* **Ctrl + V**: Paste instance
 
 ---
 
@@ -89,8 +111,8 @@ GNU General Public License v3.0 © 2025 MCUBE Team
 
 ## 🤝 Contributing
 
-Pull requests and suggestions are welcome!  
-Please open an issue for bug reports or feature requests.
+Pull requests and suggestions are welcome!
+Please open an issue to report bugs or request features.
 
 ---
 
@@ -100,4 +122,8 @@ For support or collaboration, email: [meehirmhatre1234@gmail.com](mailto:meehirm
 
 ---
 
-> **MCUBE Synthetic Data Generator** — Make your vision data smarter,
+> **MCUBE Synthetic Data Generator** — Make your vision data smarter.
+
+---
+
+Let me know if you want me to save this as a file for you!
