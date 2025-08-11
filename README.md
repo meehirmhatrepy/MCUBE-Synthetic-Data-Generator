@@ -86,10 +86,10 @@ All edits and augmentations maintain visual consistency, ensuring your exported 
 ![Example 1](./frame-1%20(1).png) 
 *Example 1:*
 
-![Example 2](./frame-1%20(2).png)  
+![Example 2](./frame-1%20(3).png)  
 *Example 2:*
 
-![Example 3](./frame-1%20(3).png)  
+![Example 3](./frame-1%20(2).png)  
 *Example 3:*
 
 ---
