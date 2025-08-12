@@ -4,7 +4,7 @@ import math
 import random
 import json
 from functools import partial
-
+import copy
 import numpy as np
 import cv2
 from PyQt5.QtWidgets import (
@@ -22,55 +22,114 @@ from read_yolo_seg_txt import read_yolo_seg_txt
 from read_coco_json import read_coco_json
 from write_coco_json import write_coco_json
 from paste_transformed_rgba_roi import paste_transformed_rgba_roi
+
 # ------------------ GUI ------------------
 
 class SyntheticGenerator(QMainWindow):
-    def save_state(self):
-        """Save the current state for undo functionality."""
-        state = {
-            'image': self.img_label.pixmap().copy() if self.img_label.pixmap() else None,
-            # Add more state as needed (e.g., annotation data)
+    # ---------- full-state helpers ----------
+    def _get_state(self):
+        """Return a deep copy of all mutable state we need to restore."""
+        return {
+            'img': None if self.img is None else self.img.copy(),
+            'instances': copy.deepcopy(self.instances),
+            'selected_idx': self.selected_idx,
+            'clipboard': copy.deepcopy(self.clipboard),
+            'clipboard_mode': bool(self.clipboard_mode),
+            'clipboard_pos': None if self.clipboard_pos is None else tuple(self.clipboard_pos),
+            'brightness': self.brightness,
+            'contrast': self.contrast,
+            'saturation': self.saturation,
+            'sharpness': self.sharpness,
+            'image_path': getattr(self, 'image_path', None)
         }
-        if not hasattr(self, 'undo_stack'):
-            self.undo_stack = []
-        if not hasattr(self, 'redo_stack'):
-            self.redo_stack = []
+
+    def _set_state(self, state):
+        """Apply a state (without pushing history)."""
+        self.is_restoring = True
+        try:
+            self.img = None if state['img'] is None else state['img'].copy()
+            if self.img is not None:
+                self.img_h, self.img_w = self.img.shape[:2]
+            self.instances = copy.deepcopy(state['instances'])
+            self.selected_idx = state['selected_idx']
+            self.clipboard = copy.deepcopy(state['clipboard'])
+            self.clipboard_mode = bool(state['clipboard_mode'])
+            self.clipboard_pos = None if state['clipboard_pos'] is None else tuple(state['clipboard_pos'])
+            self.brightness = state.get('brightness', 0)
+            self.contrast = state.get('contrast', 1.0)
+            self.saturation = state.get('saturation', 1.0)
+            self.sharpness = state.get('sharpness', 1.0)
+            if state.get('image_path'):
+                self.image_path = state['image_path']
+            # sync sliders to state values if UI exists
+            try:
+                self.slider_brightness.blockSignals(True)
+                self.slider_contrast.blockSignals(True)
+                self.slider_saturation.blockSignals(True)
+                self.slider_sharpness.blockSignals(True)
+                self.slider_brightness.setValue(int(self.brightness))
+                self.slider_contrast.setValue(int(self.contrast * 100))
+                self.slider_saturation.setValue(int(self.saturation * 100))
+                self.slider_sharpness.setValue(int(self.sharpness * 100))
+            except Exception:
+                pass
+            finally:
+                try:
+                    self.slider_brightness.blockSignals(False)
+                    self.slider_contrast.blockSignals(False)
+                    self.slider_saturation.blockSignals(False)
+                    self.slider_sharpness.blockSignals(False)
+                except Exception:
+                    pass
+            # sync transform sliders if instance selected
+            try:
+                if self.selected_idx is not None and 0 <= self.selected_idx < len(self.instances):
+                    inst = self.instances[self.selected_idx]
+                    self.slider_rotate.blockSignals(True)
+                    self.slider_scale.blockSignals(True)
+                    self.slider_rotate.setValue(int(inst.get('angle', 0.0)))
+                    self.slider_scale.setValue(int(inst.get('scale', 1.0)*100))
+                    self.slider_rotate.blockSignals(False)
+                    self.slider_scale.blockSignals(False)
+            except Exception:
+                pass
+            self.draw_image()
+        finally:
+            self.is_restoring = False
+
+    # ---------- history operations ----------
+    def save_state(self):
+        """Push current state onto undo stack (called BEFORE a mutation)."""
+        if self.is_restoring:
+            return
+        state = self._get_state()
         self.undo_stack.append(state)
+        # trim oldest
+        if len(self.undo_stack) > self.max_history:
+            self.undo_stack.pop(0)
+        # any new edit clears redo
         self.redo_stack.clear()
 
-    def restore_state(self, state):
-        """Restore a saved state."""
-        if state['image']:
-            self.img_label.setPixmap(state['image'])
-        else:
-            self.img_label.clear()
-        # Restore other state as needed
-
     def undo_action(self):
-        """Undo the last action."""
-        if not hasattr(self, 'undo_stack') or not self.undo_stack:
+        """Undo: pop undo stack and push current state to redo."""
+        if not self.undo_stack:
+            QMessageBox.information(self, 'Undo', 'Nothing to undo')
             return
-        current_state = {
-            'image': self.img_label.pixmap().copy() if self.img_label.pixmap() else None,
-        }
-        if not hasattr(self, 'redo_stack'):
-            self.redo_stack = []
-        self.redo_stack.append(current_state)
+        current = self._get_state()
+        self.redo_stack.append(current)
         state = self.undo_stack.pop()
-        self.restore_state(state)
+        self._set_state(state)
 
     def redo_action(self):
-        """Redo the last undone action."""
-        if not hasattr(self, 'redo_stack') or not self.redo_stack:
+        """Redo: pop redo and push current to undo."""
+        if not self.redo_stack:
+            QMessageBox.information(self, 'Redo', 'Nothing to redo')
             return
-        current_state = {
-            'image': self.img_label.pixmap().copy() if self.img_label.pixmap() else None,
-        }
-        if not hasattr(self, 'undo_stack'):
-            self.undo_stack = []
-        self.undo_stack.append(current_state)
+        current = self._get_state()
+        self.undo_stack.append(current)
         state = self.redo_stack.pop()
-        self.restore_state(state)
+        self._set_state(state)
+
     def __init__(self):
         """
         Initialize the main window, theme, and all state variables.
@@ -78,7 +137,11 @@ class SyntheticGenerator(QMainWindow):
         super().__init__()
         self.setWindowTitle('MCUBE Synthetic Data Generator')
         self.setGeometry(80, 80, 1280, 840)
-    
+        self.undo_stack = []
+        self.redo_stack = []
+        self.max_history = 50           # tune for memory vs undo depth
+        self.is_restoring = False       # avoid recursive saves while restoring
+
         # --- Modern Theme ---
         self.setStyleSheet("""
             QMainWindow {
@@ -90,17 +153,11 @@ class SyntheticGenerator(QMainWindow):
             QWidget {
                 background-color: transparent;
             }
-
-            /* General labels (e.g., Brightness, Sharpness) */
             QLabel {
                 color: #ffffff;
                 font-weight: bold;
                 padding: 2px;
-                /* Subtle text shadow for better visibility */
-                
             }
-
-            /* Header bar */
             QLabel#Header {
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
                     stop:0 #762dfd, stop:1 #1f9ecc);
@@ -112,16 +169,12 @@ class SyntheticGenerator(QMainWindow):
                 border-radius: 12px;
                 margin-bottom: 12px;
             }
-
-            /* Image display area */
             QLabel#ImageArea {
                 background: #1c2237;
                 color: #eee;
                 border-radius: 16px;
                 border: 2px solid #1f9ecc;
             }
-
-            /* Group boxes */
             QGroupBox {
                 border: 1px solid rgba(255,255,255,0.15);
                 border-radius: 12px;
@@ -140,8 +193,6 @@ class SyntheticGenerator(QMainWindow):
                 border-radius: 8px;
                 color: #fff;
             }
-
-            /* Buttons */
             QPushButton {
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
                     stop:0 #762dfd, stop:1 #1f9ecc);
@@ -157,8 +208,6 @@ class SyntheticGenerator(QMainWindow):
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
                     stop:0 #1f9ecc, stop:1 #762dfd);
             }
-
-            /* Inputs */
             QLineEdit, QComboBox, QSpinBox {
                 background: #232a3d;
                 color: #fff;
@@ -166,8 +215,6 @@ class SyntheticGenerator(QMainWindow):
                 border: 1px solid #1f9ecc;
                 padding: 4px 8px;
             }
-
-            /* Sliders */
             QSlider::groove:horizontal {
                 height: 8px;
                 background: #1f9ecc;
@@ -182,8 +229,6 @@ class SyntheticGenerator(QMainWindow):
             }
         """)
 
-
-
         # --- Image enhancement params ---
         self.brightness = 0
         self.contrast = 1.0
@@ -191,14 +236,16 @@ class SyntheticGenerator(QMainWindow):
         self.sharpness = 1.0
 
         self.img = None
-        self.instances = []  # each inst: {'class','orig_poly','poly','angle','scale','translate'}
+        self.img_h = 0
+        self.img_w = 0
+        self.instances = []  # each inst: {'class','orig_poly','poly','angle','scale','translate','rgba','origin'}
         self.selected_idx = None
         self.dragging = False
         self.last_mouse = None
         self.scale_factor = 1.0
 
         # clipboard for copy/cut/paste
-        self.clipboard = None  # {'rgba','origin','poly','class'}
+        self.clipboard = None  # {'rgba','origin','poly','class','bbox_topleft'}
         self.clipboard_mode = False
         self.clipboard_pos = None  # (x,y) in image coords for preview
 
@@ -218,7 +265,7 @@ class SyntheticGenerator(QMainWindow):
 
         # --- Image Display ---
         self.img_label = QLabel('Load image and label to start')
-        self.img_label.setMinimumSize(800, 800)    
+        self.img_label.setMinimumSize(800, 800)
         self.img_label.setStyleSheet('background: rgba(35,42,61,0.95); color: #eee; border-radius: 24px; border: 2px solid #1f9ecc;')
         self.img_label.setAlignment(Qt.AlignCenter)
         self.img_label.setMouseTracking(True)
@@ -265,21 +312,25 @@ class SyntheticGenerator(QMainWindow):
         self.slider_brightness = QSlider(Qt.Horizontal)
         self.slider_brightness.setMinimum(-100); self.slider_brightness.setMaximum(100); self.slider_brightness.setValue(0)
         self.slider_brightness.valueChanged.connect(self.on_enhance_change)
+        self.slider_brightness.sliderPressed.connect(self.save_state)
         enh_form.addRow('Brightness:', self.slider_brightness)
 
         self.slider_contrast = QSlider(Qt.Horizontal)
         self.slider_contrast.setMinimum(10); self.slider_contrast.setMaximum(300); self.slider_contrast.setValue(100)
         self.slider_contrast.valueChanged.connect(self.on_enhance_change)
+        self.slider_contrast.sliderPressed.connect(self.save_state)
         enh_form.addRow('Contrast:', self.slider_contrast)
 
         self.slider_saturation = QSlider(Qt.Horizontal)
         self.slider_saturation.setMinimum(10); self.slider_saturation.setMaximum(300); self.slider_saturation.setValue(100)
         self.slider_saturation.valueChanged.connect(self.on_enhance_change)
+        self.slider_saturation.sliderPressed.connect(self.save_state)
         enh_form.addRow('Saturation:', self.slider_saturation)
 
         self.slider_sharpness = QSlider(Qt.Horizontal)
         self.slider_sharpness.setMinimum(10); self.slider_sharpness.setMaximum(300); self.slider_sharpness.setValue(100)
         self.slider_sharpness.valueChanged.connect(self.on_enhance_change)
+        self.slider_sharpness.sliderPressed.connect(self.save_state)
         enh_form.addRow('Sharpness:', self.slider_sharpness)
 
         ctrl.addWidget(enh_grp)
@@ -312,11 +363,13 @@ class SyntheticGenerator(QMainWindow):
         self.slider_rotate = QSlider(Qt.Horizontal)
         self.slider_rotate.setMinimum(-180); self.slider_rotate.setMaximum(180); self.slider_rotate.setValue(0)
         self.slider_rotate.valueChanged.connect(self.on_transform_change)
+        self.slider_rotate.sliderPressed.connect(self.save_state)
         form.addRow('Rotate (deg):', self.slider_rotate)
 
         self.slider_scale = QSlider(Qt.Horizontal)
         self.slider_scale.setMinimum(10); self.slider_scale.setMaximum(300); self.slider_scale.setValue(100)
         self.slider_scale.valueChanged.connect(self.on_transform_change)
+        self.slider_scale.sliderPressed.connect(self.save_state)
         form.addRow('Scale (%):', self.slider_scale)
 
         btn_reset = QPushButton('Reset Transform')
@@ -356,20 +409,15 @@ class SyntheticGenerator(QMainWindow):
 
         ctrl.addStretch()
 
-      
         ctrl_widget = QWidget()
         ctrl_widget.setLayout(ctrl)
-        ctrl_widget.setMinimumWidth(320)  
+        ctrl_widget.setMinimumWidth(320)
 
-        hb.addWidget(self.img_label, stretch=2)   
-        hb.addWidget(ctrl_widget, stretch=1)      
+        hb.addWidget(self.img_label, stretch=2)
+        hb.addWidget(ctrl_widget, stretch=1)
 
     # ----------------- I/O -----------------
     def upload_image(self):
-        """
-        Open a file dialog to select and load an image.
-        Resets annotation and clipboard state.
-        """
         path, _ = QFileDialog.getOpenFileName(self, 'Select image', '', 'Images (*.png *.jpg *.jpeg)')
         if not path:
             return
@@ -377,6 +425,7 @@ class SyntheticGenerator(QMainWindow):
         if img is None:
             QMessageBox.critical(self, 'Error', 'Failed to read image')
             return
+        # starting fresh: clear history and push initial state
         self.image_path = path
         self.img = img
         self.img_h, self.img_w = img.shape[:2]
@@ -384,6 +433,10 @@ class SyntheticGenerator(QMainWindow):
         self.selected_idx = None
         self.clipboard = None
         self.clipboard_mode = False
+        self.undo_stack.clear()
+        self.redo_stack.clear()
+        # push initial state so Undo will return to loaded image
+        self.save_state()
         self.draw_image()
 
     def upload_txt(self):
@@ -397,18 +450,23 @@ class SyntheticGenerator(QMainWindow):
         if self.img is None:
             QMessageBox.warning(self, 'Warning', 'Load image first')
             return
+        # mutation -> save state
+        self.save_state()
         insts = read_yolo_seg_txt(path, self.img_w, self.img_h)
         self.instances = []
         class_set = set()
         for inst in insts:
             poly = inst['poly']
+            rgba, origin = extract_instance_rgba(self.img, poly)
             self.instances.append({
                 'class': inst['class'],
                 'orig_poly': poly.copy(),
                 'poly': poly.copy(),
                 'angle': 0.0,
                 'scale': 1.0,
-                'translate': np.array([0.0, 0.0])
+                'translate': np.array([0.0, 0.0]),
+                'rgba': None if rgba is None else rgba.copy(),
+                'origin': None if origin is None else tuple(origin)
             })
             class_set.add(inst['class'])
         # Update class_selector dropdown
@@ -431,6 +489,8 @@ class SyntheticGenerator(QMainWindow):
         if self.img is None:
             QMessageBox.warning(self, 'Warning', 'Load image first')
             return
+        # mutation -> save state
+        self.save_state()
         try:
             insts = read_coco_json(path, os.path.basename(self.image_path), self.img_w, self.img_h)
         except Exception as e:
@@ -441,13 +501,16 @@ class SyntheticGenerator(QMainWindow):
         for inst in insts:
             poly = inst['poly']
             cls = inst.get('class', 0)
+            rgba, origin = extract_instance_rgba(self.img, poly)
             self.instances.append({
                 'class': cls,
                 'orig_poly': poly.copy(),
                 'poly': poly.copy(),
                 'angle': 0.0,
                 'scale': 1.0,
-                'translate': np.array([0.0, 0.0])
+                'translate': np.array([0.0, 0.0]),
+                'rgba': None if rgba is None else rgba.copy(),
+                'origin': None if origin is None else tuple(origin)
             })
             class_set.add(cls)
         # Update class_selector dropdown
@@ -487,10 +550,14 @@ class SyntheticGenerator(QMainWindow):
         poly = inst['orig_poly']
         xs = poly[:,0]; ys = poly[:,1]
         minx = int(xs.min()); miny = int(ys.min())
-        rgba, origin = extract_instance_rgba(self.img, poly)
-        if rgba is None:
-            QMessageBox.warning(self, 'Info', 'Failed to extract instance')
-            return
+        rgba = inst.get('rgba', None)
+        origin = inst.get('origin', None)
+        # fallback: extract if not stored (should rarely happen)
+        if rgba is None or origin is None:
+            rgba, origin = extract_instance_rgba(self.img, poly)
+            if rgba is None:
+                QMessageBox.warning(self, 'Info', 'Failed to extract instance')
+                return
         self.clipboard = {
             'rgba': rgba.copy(),
             'origin': origin,
@@ -501,24 +568,28 @@ class SyntheticGenerator(QMainWindow):
         QMessageBox.information(self, 'Copied', 'Instance copied to clipboard')
 
     def cut_selected(self):
-        """
-        Cut the currently selected instance to the clipboard and fill the region.
-        """
         if self.selected_idx is None:
             QMessageBox.warning(self, 'Info', 'Select an instance to cut')
             return
+        # record pre-cut state
+        self.save_state()
         inst = self.instances[self.selected_idx]
-        rgba, origin = extract_instance_rgba(self.img, inst['orig_poly'])
-        if rgba is None:
-            QMessageBox.warning(self, 'Info', 'Failed to extract instance')
-            return
-        self.clipboard = {'rgba': rgba.copy(), 'origin': origin, 'poly': inst['orig_poly'].copy(), 'class': inst['class']}
-        # blank area in original image
+        rgba = inst.get('rgba', None)
+        origin = inst.get('origin', None)
+        # fallback to extraction if not present
+        if rgba is None or origin is None:
+            rgba, origin = extract_instance_rgba(self.img, inst['orig_poly'])
+            if rgba is None:
+                QMessageBox.warning(self, 'Info', 'Failed to extract instance')
+                return
+        poly = inst['orig_poly']
+        xs = poly[:,0]; ys = poly[:,1]
+        minx = int(xs.min()); miny = int(ys.min())
+        self.clipboard = {'rgba': rgba.copy(), 'origin': origin, 'poly': poly.copy(), 'class': inst['class'], 'bbox_topleft': (minx,miny)}
         mask = poly_to_mask(inst['orig_poly'], self.img_h, self.img_w)
         if self.fill_choice.currentText() == 'Black':
             self.img[mask>0] = (0,0,0)
         else:
-            # mean color in bounding box
             xs = inst['orig_poly'][:,0]; ys = inst['orig_poly'][:,1]
             minx = max(0, int(xs.min())); miny = max(0, int(ys.min()))
             maxx = min(self.img_w, int(xs.max())+1); maxy = min(self.img_h, int(ys.max())+1)
@@ -529,11 +600,11 @@ class SyntheticGenerator(QMainWindow):
                 mean = cv2.mean(roi)[:3]
                 fill = (int(mean[0]), int(mean[1]), int(mean[2]))
             self.img[mask>0] = fill
-        # remove instance
+        # remove instance from list
         del self.instances[self.selected_idx]
         self.selected_idx = None
-        QMessageBox.information(self, 'Cut', 'Instance cut to clipboard')
         self.draw_image()
+        QMessageBox.information(self, 'Cut', 'Instance cut to clipboard')
 
     def enter_paste_mode(self):
         """
@@ -548,26 +619,27 @@ class SyntheticGenerator(QMainWindow):
         self.draw_image()
 
     def place_clipboard_at(self, x, y):
-        """
-        Paste the clipboard instance at the given (x, y) location.
-        """
+        # save pre-paste
+        self.save_state()
         poly = self.clipboard['poly'].copy()
-        minx, miny = self.clipboard['bbox_topleft']
-        # Compute translation so that bbox top-left moves to (x, y)
+        minx, miny = self.clipboard.get('bbox_topleft', (int(poly[:,0].min()), int(poly[:,1].min())))
         translate = np.array([x, y]) - np.array([minx, miny])
         newpoly = poly + translate
-        self.instances.append({
+        inst = {
             'class': self.clipboard['class'],
             'orig_poly': poly.copy(),
             'poly': newpoly,
             'angle': 0.0,
             'scale': 1.0,
-            'translate': translate
-        })
+            'translate': translate,
+            'rgba': self.clipboard['rgba'].copy(),
+            'origin': tuple(self.clipboard['origin'])
+        }
+        self.instances.append(inst)
         self.clipboard_mode = False
         self.selected_idx = len(self.instances)-1
         self.draw_image()
-  
+
     # ----------------- Interaction -----------------
     def img_mouse_press(self, ev):
         """
@@ -580,9 +652,11 @@ class SyntheticGenerator(QMainWindow):
         if ix is None or ix < 0 or iy is None or iy < 0 or ix >= self.img_w or iy >= self.img_h:
             return
         if self.clipboard_mode:
-            # place clipboard
+            # paste is a mutation: save handled inside place_clipboard_at
             self.place_clipboard_at(ix, iy)
             return
+        # Save once at start of user action (drag/selection)
+        self.save_state()
         # selection logic: choose smallest area polygon containing click
         candidates = []
         for i, inst in enumerate(self.instances):
@@ -608,6 +682,14 @@ class SyntheticGenerator(QMainWindow):
         self.last_candidates = candidates
         self.dragging = True
         self.last_mouse = (ix, iy)
+        # sync transform sliders with selected inst
+        try:
+            inst = self.instances[self.selected_idx]
+            self.slider_rotate.blockSignals(True); self.slider_scale.blockSignals(True)
+            self.slider_rotate.setValue(int(inst.get('angle',0.0))); self.slider_scale.setValue(int(inst.get('scale',1.0)*100))
+            self.slider_rotate.blockSignals(False); self.slider_scale.blockSignals(False)
+        except Exception:
+            pass
         self.draw_image()
 
     def img_mouse_move(self, ev):
@@ -701,6 +783,8 @@ class SyntheticGenerator(QMainWindow):
         """
         if self.selected_idx is None:
             return
+        # this is a mutation of the workspace: save state first
+        self.save_state()
         inst = self.instances[self.selected_idx]
         inst['poly'] = inst['orig_poly'].copy()
         inst['angle'] = 0.0; inst['scale'] = 1.0; inst['translate'] = np.array([0.0,0.0])
@@ -745,24 +829,30 @@ class SyntheticGenerator(QMainWindow):
         # --- Apply enhancements ---
         canvas = self.enhance_image(self.img.copy())
 
-        
+        # --- Paste each instance using stored rgba (preferred) ---
         for i, inst in enumerate(self.instances):
-            rgba, origin_src = extract_instance_rgba(canvas, inst['orig_poly'])
-    # ...
-            if rgba is None:
-                continue
+            rgba = inst.get('rgba', None)
+            origin_src = inst.get('origin', None)
+            # fallback: extract from original image if stored pixels missing
+            if rgba is None or origin_src is None:
+                rgba, origin_src = extract_instance_rgba(self.img, inst['orig_poly'])
+                origin_src = origin_src
+                if rgba is None:
+                    continue
 
-            # Use bounding box top-left for both polygon and ROI
+            # Compute bbox centers
             xs_src = inst['orig_poly'][:,0]; ys_src = inst['orig_poly'][:,1]
             minx_src = xs_src.min(); maxx_src = xs_src.max()
             miny_src = ys_src.min(); maxy_src = ys_src.max()
             bbox_center_src = np.array([(minx_src + maxx_src) / 2, (miny_src + maxy_src) / 2], dtype=np.float32)
+
             xs_dst = inst['poly'][:,0]; ys_dst = inst['poly'][:,1]
             minx_dst = xs_dst.min(); maxx_dst = xs_dst.max()
             miny_dst = ys_dst.min(); maxy_dst = ys_dst.max()
             bbox_center_dst = np.array([(minx_dst + maxx_dst) / 2, (miny_dst + maxy_dst) / 2], dtype=np.float32)
-            angle = inst['angle']
-            scale = inst['scale']
+
+            angle = inst.get('angle', 0.0)
+            scale = inst.get('scale', 1.0)
 
             canvas = paste_transformed_rgba_roi(
                 canvas,
@@ -774,9 +864,9 @@ class SyntheticGenerator(QMainWindow):
                 scale
             )
 
-        # --- Clipboard preview ---
+        # --- Clipboard preview (use stored rgba directly) ---
         if self.clipboard_mode and self.clipboard is not None and self.clipboard_pos is not None:
-            rgba, origin_src = extract_instance_rgba(canvas, self.clipboard['poly'])
+            rgba = self.clipboard['rgba']
             origin_src = self.clipboard['origin']
             poly = self.clipboard['poly']
             xs = poly[:,0]; ys = poly[:,1]
@@ -801,9 +891,12 @@ class SyntheticGenerator(QMainWindow):
         # --- Draw polygon outlines ---
         disp = canvas.copy()
         for i, inst in enumerate(self.instances):
-            pts = inst['poly'].astype(np.int32)
-            color = (0, 255, 0) if i == self.selected_idx else (255, 0, 0)
-            cv2.polylines(disp, [pts], isClosed=True, color=color, thickness=2)
+            try:
+                pts = inst['poly'].astype(np.int32)
+                color = (0, 255, 0) if i == self.selected_idx else (255, 0, 0)
+                cv2.polylines(disp, [pts], isClosed=True, color=color, thickness=2)
+            except Exception:
+                continue
 
         h, w = disp.shape[:2]
         qimg = QImage(disp.data, w, h, 3 * w, QImage.Format_BGR888)
@@ -826,9 +919,12 @@ class SyntheticGenerator(QMainWindow):
         out_json_path = os.path.join(folder, base + '_aug.json')
         final = self.img.copy()
         for inst in self.instances:
-            rgba, origin = extract_instance_rgba(final, inst['orig_poly'])
-            if rgba is None:
-                continue
+            rgba = inst.get('rgba', None)
+            origin = inst.get('origin', None)
+            if rgba is None or origin is None:
+                rgba, origin = extract_instance_rgba(final, inst['orig_poly'])
+                if rgba is None:
+                    continue
             xs_src = inst['orig_poly'][:,0]; ys_src = inst['orig_poly'][:,1]
             minx_src = xs_src.min(); maxx_src = xs_src.max()
             miny_src = ys_src.min(); maxy_src = ys_src.max()
@@ -837,7 +933,7 @@ class SyntheticGenerator(QMainWindow):
             minx_dst = xs_dst.min(); maxx_dst = xs_dst.max()
             miny_dst = ys_dst.min(); maxy_dst = ys_dst.max()
             bbox_center_dst = np.array([(minx_dst + maxx_dst) / 2, (miny_dst + maxy_dst) / 2], dtype=np.float32)
-            final = paste_transformed_rgba_roi(final, rgba, origin, bbox_center_src, bbox_center_dst, inst['angle'], inst['scale'])
+            final = paste_transformed_rgba_roi(final, rgba, origin, bbox_center_src, bbox_center_dst, inst.get('angle',0.0), inst.get('scale',1.0))
         cv2.imwrite(out_img_path, final)
         print(f"Saved image: {out_img_path}")
         write_coco_json(out_json_path, out_img_path, self.img_w, self.img_h, [{'class':inst['class'],'poly':inst['poly']} for inst in self.instances])
@@ -869,7 +965,7 @@ class SyntheticGenerator(QMainWindow):
         for i in range(n):
             # Start with original image and original instances
             final = self.img.copy()
-            new_instances = [dict(inst) for inst in self.instances]  # shallow copy
+            new_instances = [dict(inst) for inst in self.instances]  # shallow copy of metadata
             for idx in target_idxs:
                 inst = self.instances[idx]
                 orig_poly = inst['orig_poly']
@@ -883,22 +979,27 @@ class SyntheticGenerator(QMainWindow):
                 # No rotation/scale for pixel-perfect paste (add if needed)
                 translate = np.array([tx, ty]) - np.array([minx, miny])
                 newpoly = orig_poly + translate
-                # Extract RGBA from original instance
-                rgba, origin = extract_instance_rgba(self.img, orig_poly)
-                if rgba is None:
-                    continue
+                # Extract RGBA from original instance (prefer stored)
+                rgba = inst.get('rgba', None)
+                origin = inst.get('origin', None)
+                if rgba is None or origin is None:
+                    rgba, origin = extract_instance_rgba(self.img, orig_poly)
+                    if rgba is None:
+                        continue
                 # Paste using bbox top-left as reference
                 origin_src = np.array([minx, miny])
                 origin_dst = np.array([int(tx), int(ty)])
                 final = paste_transformed_rgba_roi(final, rgba, origin_src, origin_src, origin_dst, 0.0, 1.0)
-                # Add new instance annotation
+                # Add new instance annotation (store the rgba too)
                 new_instances.append({
                     'class': inst['class'],
                     'orig_poly': orig_poly.copy(),
                     'poly': newpoly,
                     'angle': 0.0,
                     'scale': 1.0,
-                    'translate': translate
+                    'translate': translate,
+                    'rgba': rgba.copy(),
+                    'origin': tuple(origin)
                 })
             # Save image and annotation
             out_img_path = os.path.join(folder, f"{base}_aug_{i:03d}.png")
@@ -907,26 +1008,25 @@ class SyntheticGenerator(QMainWindow):
             write_coco_json(out_json_path, out_img_path, self.img_w, self.img_h, [{'class':inst['class'],'poly':inst['poly']} for inst in new_instances])
         QMessageBox.information(self, 'Done', f'Generated {n} images in {folder}')
 
-
-# Keyboard shortcuts
     def keyPressEvent(self, e):
         """
-        Handle keyboard shortcuts for copy, cut, and paste.
+        Keyboard shortcuts for copy, cut, paste, undo, redo.
         """
-        if e.modifiers() == Qt.ControlModifier and e.key() == Qt.Key_C:
-            self.copy_selected()
-        if e.modifiers() == Qt.ControlModifier and e.key() == Qt.Key_X:
-            self.cut_selected()
-        if e.modifiers() == Qt.ControlModifier and e.key() == Qt.Key_V:
-            self.enter_paste_mode()
-            # Ctrl+Z for undo
-            if e.modifiers() & Qt.ControlModifier and e.key() == Qt.Key_Z:
-                self.undo_action()
-            # Ctrl+Y for redo
-            elif e.modifiers() & Qt.ControlModifier and e.key() == Qt.Key_Y:
-                self.redo_action()
-            else:
-                super().keyPressEvent(e)
+        if e.modifiers() & Qt.ControlModifier:
+            k = e.key()
+            if k == Qt.Key_C:
+                self.copy_selected(); return
+            if k == Qt.Key_X:
+                self.cut_selected(); return
+            if k == Qt.Key_V:
+                self.enter_paste_mode(); return
+            if k == Qt.Key_Z:
+                self.undo_action(); return
+            if k == Qt.Key_Y:
+                self.redo_action(); return
+        super().keyPressEvent(e)
+
+
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     win = SyntheticGenerator()
@@ -934,4 +1034,3 @@ if __name__ == '__main__':
     print("Starting event loop")
     exit_code = app.exec_()
     print(f"Exited with code {exit_code}")
-
